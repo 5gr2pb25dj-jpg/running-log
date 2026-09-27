@@ -62,20 +62,20 @@ li:last-child{border-bottom:1px solid var(--line)}
 .x.c{color:var(--bad)}
 .hint{font-size:12px;color:var(--muted);margin:0 0 8px}
 
-:root{--h0:#ececec;--h1:#cfcfcf;--h2:#9a9a9a;--h3:#5a5a5a;--h4:#1a1a1a}
-@media (prefers-color-scheme: dark){:root{--h0:#1f1f1f;--h1:#3a3a3a;--h2:#6e6e6e;--h3:#a8a8a8;--h4:#ececec}}
-.heat{display:flex;flex-direction:column;gap:10px}
-.heat .cap{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
-.heat .body2{display:flex;gap:8px}
-.heat .days{display:grid;grid-template-rows:repeat(7,1fr);gap:4px;font-size:10px;color:var(--muted)}
-.heat .days span{display:flex;align-items:center}
-.heat .grid{flex:1;display:grid;grid-template-columns:repeat(16,minmax(0,1fr));grid-template-rows:repeat(7,auto);grid-auto-flow:column;gap:4px}
-.heat .c{aspect-ratio:1;border-radius:3px;background:var(--h0)}
-.heat .c.l1{background:var(--h1)}.heat .c.l2{background:var(--h2)}.heat .c.l3{background:var(--h3)}.heat .c.l4{background:var(--h4)}
-.heat .c.f{background:transparent}
-.heat .c.t{outline:1px solid var(--muted);outline-offset:1px}
-.legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
-.legend i{width:10px;height:10px;border-radius:2px;background:var(--h0)}
+.cum{display:flex;flex-direction:column;gap:8px}
+.cum .cap{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 8px}
+.cum svg{display:block;width:100%;height:auto;overflow:visible}
+.cum .grid{stroke:var(--line);stroke-width:1}
+.cum .prev{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4;opacity:.7}
+.cum .area{fill:var(--ink);opacity:.07}
+.cum .cur{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.cum .dot{fill:var(--ink)}
+.cum .yl{fill:var(--muted);font-size:10px}
+.cum .axis{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.legend{display:flex;align-items:center;gap:16px;font-size:11px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:16px;border-top:2px solid var(--ink)}
+.legend i.d{border-top:2px dashed var(--muted)}
 footer{display:flex;gap:16px;font-size:12px;color:var(--muted)}
 footer button{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
 </style>
@@ -88,13 +88,11 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     <span class="sub num" id="sub">今月 0.0 km · 0 回</span>
   </section>
 
-  <section class="heat" aria-label="走った日カレンダー">
-    <div class="cap"><span id="heatCap">走った日 · 16週</span><span class="num" id="streak"></span></div>
-    <div class="body2">
-      <div class="days" aria-hidden="true"><span>月</span><span></span><span>水</span><span></span><span>金</span><span></span><span>日</span></div>
-      <div class="grid" id="heat"></div>
-    </div>
-    <div class="legend" aria-hidden="true"><span>少</span><i></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i><span>多</span></div>
+  <section class="cum" aria-label="今月の累積距離">
+    <div class="cap"><span id="cumCap">今月の累積</span><span class="num" id="cumDiff"></span></div>
+    <svg id="cum" viewBox="0 0 340 170" role="img" aria-label="今月と先月の累積距離の線グラフ"></svg>
+    <div class="axis num"><span>1日</span><span id="midDay">15日</span><span id="endDay">30日</span></div>
+    <div class="legend" aria-hidden="true"><span><i></i>今月</span><span><i class="d"></i>先月</span></div>
   </section>
 
   <form id="form" novalidate>
@@ -190,29 +188,34 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     $('sub').textContent='今月 '+mr.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+mr.length+' 回'+(mk?' · '+mk.toLocaleString()+' kcal':'');
     $('hint').hidden=!isExample;
 
-    // 走った日カレンダー（16週・月曜始まり）
+    // 月間累積ライン（今月 vs 先月）
     const byDay={};
     list.forEach(r=>{ byDay[r.date]=(byDay[r.date]||0)+r.km; });
-    const start=new Date(mon); start.setDate(mon.getDate()-7*15);
-    const heat=$('heat'); heat.innerHTML='';
-    let ran=0;
-    for(let i=0;i<112;i++){
-      const d=new Date(start); d.setDate(start.getDate()+i);
-      const key=ymd(d), v=byDay[key]||0, c=document.createElement('div');
-      let cls='c';
-      if(d>today) cls+=' f';
-      else{
-        if(v>0){ ran++; cls+= v<4?' l1': v<7?' l2': v<10?' l3':' l4'; }
-        if(key===ymd(today)) cls+=' t';
-        c.title=(d.getMonth()+1)+'/'+d.getDate()+(v?' '+v.toFixed(1)+' km':'');
-      }
-      c.className=cls; heat.append(c);
-    }
-    let st=0; const s=new Date(today);
-    if(!byDay[ymd(s)]) s.setDate(s.getDate()-1);
-    while(byDay[ymd(s)]){ st++; s.setDate(s.getDate()-1); }
-    $('heatCap').textContent='走った日 · 16週で '+ran+' 日';
-    $('streak').textContent=st?st+' 日連続':'';
+    const yy=today.getFullYear(), mm=today.getMonth();
+    const nDays=new Date(yy,mm+1,0).getDate();
+    const pDays=new Date(yy,mm,0).getDate();
+    const cumOf=(y,m,upto)=>{ const out=[]; let s=0; for(let d=1; d<=upto; d++){ s+=byDay[ymd(new Date(y,m,d))]||0; out.push(s); } return out; };
+    const cur=cumOf(yy,mm,today.getDate());
+    const prv=cumOf(yy,mm-1,Math.min(pDays,nDays));
+    const curTotal=cur[cur.length-1]||0;
+    const top=Math.max(curTotal, prv[prv.length-1]||0, 10);
+    const step=top<=20?5:top<=50?10:top<=100?25:top<=200?50:100;
+    const yMax=Math.ceil(top/step)*step;
+    const W=340, T=10, B=160;
+    const X=d=>((d-1)/(nDays-1)*W).toFixed(1);
+    const Y=k=>(B-k/yMax*(B-T)).toFixed(1);
+    const path=a=>a.map((k,i)=>(i?'L':'M')+X(i+1)+' '+Y(k)).join(' ');
+    let svg='';
+    [0,yMax/2,yMax].forEach(v=>{ svg+='<line class="grid" x1="0" x2="'+W+'" y1="'+Y(v)+'" y2="'+Y(v)+'"/>'; if(v) svg+='<text class="yl" x="'+W+'" y="'+(Y(v)-4)+'" text-anchor="end">'+v+(v===yMax?' km':'')+'</text>'; });
+    if(prv.length>1) svg+='<path class="prev" d="'+path(prv)+'"/>';
+    if(cur.length>1) svg+='<path class="area" d="'+path(cur)+' L'+X(cur.length)+' '+B+' L0 '+B+' Z"/><path class="cur" d="'+path(cur)+'"/>';
+    svg+='<circle class="dot" cx="'+X(cur.length)+'" cy="'+Y(curTotal)+'" r="4"/>';
+    $('cum').innerHTML=svg;
+    $('cumCap').textContent=(mm+1)+'月の累積 '+curTotal.toFixed(1)+' km';
+    const same=prv[Math.min(cur.length,prv.length)-1]||0, diff=curTotal-same;
+    $('cumDiff').textContent='先月の同じ日より '+(diff>=0?'+':'−')+Math.abs(diff).toFixed(1)+' km';
+    $('midDay').textContent=Math.round(nDays/2)+'日';
+    $('endDay').textContent=nDays+'日';
     const ul=$('list'); ul.innerHTML='';
     list.forEach(r=>{
       const d=parse(r.date), li=document.createElement('li');

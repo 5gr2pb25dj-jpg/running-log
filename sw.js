@@ -1,5 +1,5 @@
 // オフラインでも開けるようにするキャッシュ。index.html などを更新したら VERSION を上げる。
-const VERSION = 'runlog-v2';
+const VERSION = 'runlog-v3';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
