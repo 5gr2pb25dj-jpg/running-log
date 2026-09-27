@@ -62,6 +62,20 @@ li:last-child{border-bottom:1px solid var(--line)}
 .x.c{color:var(--bad)}
 .hint{font-size:12px;color:var(--muted);margin:0 0 8px}
 
+:root{--h0:#ececec;--h1:#cfcfcf;--h2:#9a9a9a;--h3:#5a5a5a;--h4:#1a1a1a}
+@media (prefers-color-scheme: dark){:root{--h0:#1f1f1f;--h1:#3a3a3a;--h2:#6e6e6e;--h3:#a8a8a8;--h4:#ececec}}
+.heat{display:flex;flex-direction:column;gap:10px}
+.heat .cap{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.heat .body2{display:flex;gap:8px}
+.heat .days{display:grid;grid-template-rows:repeat(7,1fr);gap:4px;font-size:10px;color:var(--muted)}
+.heat .days span{display:flex;align-items:center}
+.heat .grid{flex:1;display:grid;grid-template-columns:repeat(16,minmax(0,1fr));grid-template-rows:repeat(7,auto);grid-auto-flow:column;gap:4px}
+.heat .c{aspect-ratio:1;border-radius:3px;background:var(--h0)}
+.heat .c.l1{background:var(--h1)}.heat .c.l2{background:var(--h2)}.heat .c.l3{background:var(--h3)}.heat .c.l4{background:var(--h4)}
+.heat .c.f{background:transparent}
+.heat .c.t{outline:1px solid var(--muted);outline-offset:1px}
+.legend{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.legend i{width:10px;height:10px;border-radius:2px;background:var(--h0)}
 footer{display:flex;gap:16px;font-size:12px;color:var(--muted)}
 footer button{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
 </style>
@@ -72,6 +86,15 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     <span class="cap">今週</span>
     <span class="km num"><span id="weekKm">0.0</span><small>km</small></span>
     <span class="sub num" id="sub">今月 0.0 km · 0 回</span>
+  </section>
+
+  <section class="heat" aria-label="走った日カレンダー">
+    <div class="cap"><span id="heatCap">走った日 · 16週</span><span class="num" id="streak"></span></div>
+    <div class="body2">
+      <div class="days" aria-hidden="true"><span>月</span><span></span><span>水</span><span></span><span>金</span><span></span><span>日</span></div>
+      <div class="grid" id="heat"></div>
+    </div>
+    <div class="legend" aria-hidden="true"><span>少</span><i></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i><span>多</span></div>
   </section>
 
   <form id="form" novalidate>
@@ -166,6 +189,30 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     $('weekKm').textContent=list.filter(r=>r.date>=monS).reduce((a,r)=>a+r.km,0).toFixed(1);
     $('sub').textContent='今月 '+mr.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+mr.length+' 回'+(mk?' · '+mk.toLocaleString()+' kcal':'');
     $('hint').hidden=!isExample;
+
+    // 走った日カレンダー（16週・月曜始まり）
+    const byDay={};
+    list.forEach(r=>{ byDay[r.date]=(byDay[r.date]||0)+r.km; });
+    const start=new Date(mon); start.setDate(mon.getDate()-7*15);
+    const heat=$('heat'); heat.innerHTML='';
+    let ran=0;
+    for(let i=0;i<112;i++){
+      const d=new Date(start); d.setDate(start.getDate()+i);
+      const key=ymd(d), v=byDay[key]||0, c=document.createElement('div');
+      let cls='c';
+      if(d>today) cls+=' f';
+      else{
+        if(v>0){ ran++; cls+= v<4?' l1': v<7?' l2': v<10?' l3':' l4'; }
+        if(key===ymd(today)) cls+=' t';
+        c.title=(d.getMonth()+1)+'/'+d.getDate()+(v?' '+v.toFixed(1)+' km':'');
+      }
+      c.className=cls; heat.append(c);
+    }
+    let st=0; const s=new Date(today);
+    if(!byDay[ymd(s)]) s.setDate(s.getDate()-1);
+    while(byDay[ymd(s)]){ st++; s.setDate(s.getDate()-1); }
+    $('heatCap').textContent='走った日 · 16週で '+ran+' 日';
+    $('streak').textContent=st?st+' 日連続':'';
     const ul=$('list'); ul.innerHTML='';
     list.forEach(r=>{
       const d=parse(r.date), li=document.createElement('li');
