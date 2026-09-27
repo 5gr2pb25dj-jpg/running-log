@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RUN</title>
+<meta name="description" content="ミニマルなランニング記録">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="RUN">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<style>
+:root{
+  --bg:#fafafa; --ink:#1a1a1a; --muted:#8a8a8a; --line:#e6e6e6; --field:#f0f0f0; --bad:#b3372c;
+  --f:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#121212; --ink:#ececec; --muted:#7d7d7d; --line:#262626; --field:#1c1c1c; --bad:#ec7a6f; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:15px;line-height:1.6;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+.wrap{max-width:480px;margin:0 auto;padding-inline:20px;padding-block:40px 64px;display:flex;flex-direction:column;gap:40px}
+.num{font-variant-numeric:tabular-nums}
+
+.hero{display:flex;flex-direction:column;gap:4px}
+.hero .cap{font-size:12px;color:var(--muted)}
+.hero .km{font-size:64px;font-weight:200;line-height:1;letter-spacing:-.02em}
+.hero .km small{font-size:18px;color:var(--muted);margin-left:6px;letter-spacing:0;font-weight:400}
+.hero .sub{font-size:13px;color:var(--muted)}
+
+form{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:8px}
+input{font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:0;border-radius:8px;padding:11px 12px;width:100%;min-width:0;-webkit-appearance:none;appearance:none}
+input[type=date]{min-height:46px}
+input::placeholder{color:var(--muted)}
+input:focus-visible,button:focus-visible{outline:1.5px solid var(--ink);outline-offset:2px}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
+.save{background:var(--ink);color:var(--bg);border-radius:8px;padding:11px;font-size:15px;font-weight:500}
+.save:disabled{opacity:.4;cursor:default}
+.msg{font-size:12px;min-height:1.2em;margin:0;color:var(--muted)}
+.msg.err{color:var(--bad)}
+.body{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.body input{width:88px;padding:6px 10px}
+
+ul{list-style:none;margin:0;padding:0}
+li{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:baseline;padding:14px 0;border-top:1px solid var(--line)}
+li:last-child{border-bottom:1px solid var(--line)}
+.d{font-size:13px;color:var(--muted)}
+.k{font-size:17px}
+.k small{font-size:12px;color:var(--muted);margin-left:2px}
+.m{font-size:12px;color:var(--muted);display:block;overflow-wrap:anywhere}
+.x{font-size:12px;color:var(--muted);padding:4px 0 4px 8px}
+.x.c{color:var(--bad)}
+.hint{font-size:12px;color:var(--muted);margin:0 0 8px}
+
+footer{display:flex;gap:16px;font-size:12px;color:var(--muted)}
+footer button{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero" aria-label="今週">
+    <span class="cap">今週</span>
+    <span class="km num"><span id="weekKm">0.0</span><small>km</small></span>
+    <span class="sub num" id="sub">今月 0.0 km · 0 回</span>
+  </section>
+
+  <form id="form" novalidate>
+    <div class="row">
+      <input id="date" type="date" aria-label="日付">
+      <input id="dist" type="number" inputmode="decimal" step="0.01" min="0" placeholder="km" aria-label="距離 km">
+      <input id="time" type="text" inputmode="numeric" placeholder="分:秒" aria-label="タイム（例 28:30 または 1:05:00）">
+    </div>
+    <input id="note" type="text" maxlength="120" placeholder="メモ" aria-label="メモ">
+    <label class="body" for="wt"><span>体重</span><input id="wt" type="number" inputmode="decimal" step="0.1" min="20" max="300" placeholder="kg"><span>kg</span></label>
+    <button class="save" id="save" type="submit">記録</button>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+
+  <section aria-label="記録">
+    <p class="hint" id="hint" hidden>例</p>
+    <ul id="list"></ul>
+  </section>
+
+  <footer>
+    <button type="button" id="export">バックアップ</button>
+    <button type="button" id="import">復元</button>
+    <input type="file" id="file" accept="application/json,.json" hidden>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const W = ['日','月','火','水','木','金','土'];
+  const KEY = 'runlog.v1';
+  let state = load();              // {weight, runs:[{id,date,km,sec,note,weight,kcal,created}]}
+  let pendingDel = null;
+
+  function load(){
+    try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && Array.isArray(s.runs)) return s; }catch(e){}
+    return {weight:0, runs:[]};
+  }
+  function persist(){
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); return true; }
+    catch(e){ setMsg('保存できませんでした','err'); return false; }
+  }
+  if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+
+  const pad = n => String(n).padStart(2,'0');
+  const ymd = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  const parse = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+  const fmt = s => { if(!s) return ''; const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60; return h? h+':'+pad(m)+':'+pad(x) : m+':'+pad(x); };
+  const pace = (km,s) => { if(!(km>0&&s>0)) return ''; const p=Math.round(s/km); return Math.floor(p/60)+"'"+pad(p%60)+'"'; };
+  const parseTime = t => {
+    t = t.trim(); if(!t) return 0;
+    const p = t.split(/[:：.]/).map(v=>parseInt(v,10));
+    if(p.some(isNaN)) return -1;
+    if(p.length===1) return p[0]*60;
+    if(p.length===2) return p[0]*60+p[1];
+    if(p.length===3) return p[0]*3600+p[1]*60+p[2];
+    return -1;
+  };
+
+  // METs by running speed (km/h), Compendium of Physical Activities
+  const MET = [[6.4,6.0],[8.0,8.3],[8.4,9.0],[9.7,9.8],[10.8,10.5],[11.3,11.0],[12.1,11.8],[12.9,12.3],[13.8,12.8],[14.5,14.5],[16.1,16.0],[17.7,19.0],[19.3,19.8],[20.9,23.0],[22.5,24.5]];
+  function mets(v){
+    if(v<=MET[0][0]) return Math.max(3, MET[0][1]*v/MET[0][0]);
+    for(let i=1;i<MET.length;i++){ const [a,ma]=MET[i-1],[b,mb]=MET[i]; if(v<=b) return ma+(mb-ma)*(v-a)/(b-a); }
+    return MET[MET.length-1][1];
+  }
+  // kcal = METs × 体重kg × 時間h × 1.05（タイム無しは 体重 × 距離 の目安）
+  function kcal(km,sec,wt){
+    if(!(km>0&&wt>0)) return 0;
+    if(sec>0){ const h=sec/3600; return Math.round(mets(km/h)*wt*h*1.05); }
+    return Math.round(wt*km);
+  }
+
+  $('date').value = ymd(new Date());
+  if(state.weight) $('wt').value = state.weight;
+
+  function examples(){
+    const t=new Date(); const d=n=>{const x=new Date(t); x.setDate(t.getDate()-n); return ymd(x);};
+    return [{id:'a',date:d(1),km:5.2,sec:1710,note:''},{id:'b',date:d(3),km:3.0,sec:1020,note:''},{id:'c',date:d(6),km:7.5,sec:2580,note:'ゆっくり'}];
+  }
+
+  function render(){
+    const isExample = state.runs.length===0;
+    const runs = isExample ? examples() : state.runs;
+    const list = runs.slice().sort((a,b)=> a.date<b.date?1:a.date>b.date?-1:(b.created||0)-(a.created||0));
+    const today=new Date(); today.setHours(0,0,0,0);
+    const mon=new Date(today); mon.setDate(today.getDate()-((today.getDay()+6)%7));
+    const monS=ymd(mon), mKey=ymd(today).slice(0,7);
+    const kc = r => r.kcal || kcal(r.km,r.sec,state.weight);
+    const mr=list.filter(r=>r.date.startsWith(mKey));
+    const mk=mr.reduce((a,r)=>a+kc(r),0);
+    $('weekKm').textContent=list.filter(r=>r.date>=monS).reduce((a,r)=>a+r.km,0).toFixed(1);
+    $('sub').textContent='今月 '+mr.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+mr.length+' 回'+(mk?' · '+mk.toLocaleString()+' kcal':'');
+    $('hint').hidden=!isExample;
+    const ul=$('list'); ul.innerHTML='';
+    list.forEach(r=>{
+      const d=parse(r.date), li=document.createElement('li');
+      const dd=document.createElement('span'); dd.className='d num'; dd.textContent=(d.getMonth()+1)+'/'+d.getDate()+' '+W[d.getDay()];
+      const main=document.createElement('div');
+      const k=document.createElement('span'); k.className='k num'; k.textContent=r.km.toFixed(2);
+      const sm=document.createElement('small'); sm.textContent='km'; k.append(sm);
+      const m=document.createElement('span'); m.className='m num';
+      const p=pace(r.km,r.sec), c=kc(r);
+      m.textContent=[fmt(r.sec), p&&p+'/km', c&&c+' kcal', r.note].filter(Boolean).join(' · ');
+      main.append(k,m);
+      li.append(dd,main);
+      if(!isExample){
+        const x=document.createElement('button'); x.type='button';
+        const conf=pendingDel===r.id; x.className='x'+(conf?' c':''); x.textContent=conf?'削除する':'×';
+        x.setAttribute('aria-label',conf?'削除を確定':'削除');
+        x.addEventListener('click',()=>{
+          if(!conf){ pendingDel=r.id; render(); return; }
+          pendingDel=null;
+          state.runs=state.runs.filter(z=>z.id!==r.id); persist(); render();
+        });
+        li.append(x);
+      } else li.append(document.createElement('span'));
+      ul.append(li);
+    });
+  }
+
+  function setMsg(t,c){ const m=$('msg'); m.textContent=t; m.className='msg '+(c||''); }
+
+  function prev(){
+    const km=parseFloat($('dist').value), s=parseTime($('time').value), p=pace(km,s>0?s:0), k=kcal(km,s>0?s:0,state.weight);
+    setMsg([p&&'ペース '+p+'/km', k&&'約 '+k+' kcal', (km>0&&!state.weight)&&'体重を入れるとカロリーも出ます'].filter(Boolean).join(' · '));
+  }
+  $('dist').addEventListener('input',prev); $('time').addEventListener('input',prev);
+
+  $('wt').addEventListener('input',()=>{
+    const v=parseFloat($('wt').value);
+    state.weight = v>=20&&v<=300 ? Math.round(v*10)/10 : 0;
+    persist(); prev(); render();
+  });
+
+  $('form').addEventListener('submit',e=>{
+    e.preventDefault();
+    const km=parseFloat($('dist').value), date=$('date').value, sec=parseTime($('time').value);
+    if(!date) return setMsg('日付を入れてください','err');
+    if(!(km>0)) return setMsg('距離を入れてください','err');
+    if(sec<0) return setMsg('タイムは 28:30 のように入れてください','err');
+    const w=state.weight;
+    state.runs.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),date,km:Math.round(km*100)/100,sec,note:$('note').value.trim(),weight:w,kcal:kcal(km,sec,w),created:Date.now()});
+    if(!persist()){ state.runs.pop(); return; }
+    $('dist').value=''; $('time').value=''; $('note').value='';
+    setMsg('記録しました'); render();
+  });
+
+  // backup / restore
+  $('export').addEventListener('click',async()=>{
+    const json=JSON.stringify(state,null,1);
+    const name='runlog-'+ymd(new Date())+'.json';
+    const file=new File([json],name,{type:'application/json'});
+    try{
+      if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); return; }
+    }catch(e){ if(e && e.name==='AbortError') return; }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  });
+  $('import').addEventListener('click',()=>$('file').click());
+  $('file').addEventListener('change',async()=>{
+    const f=$('file').files[0]; $('file').value='';
+    if(!f) return;
+    try{
+      const s=JSON.parse(await f.text());
+      if(!s || !Array.isArray(s.runs)) throw 0;
+      const ids=new Set(state.runs.map(r=>r.id));
+      const add=s.runs.filter(r=>r && r.id && !ids.has(r.id) && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && Number(r.km)>0);
+      state.runs=state.runs.concat(add);
+      if(!state.weight && s.weight){ state.weight=s.weight; $('wt').value=s.weight; }
+      persist(); render(); setMsg(add.length+' 件を復元しました');
+    }catch(e){ setMsg('このファイルは読み込めません','err'); }
+  });
+
+  render();
+
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
