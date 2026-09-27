@@ -97,10 +97,10 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
 </head>
 <body>
 <div class="wrap">
-  <section class="hero" aria-label="今週">
-    <span class="cap num" id="weekCap">今週</span>
+  <section class="hero" aria-label="今月">
+    <span class="cap num" id="weekCap">今月</span>
     <span class="km num"><span id="weekKm">0.0</span><small>km</small></span>
-    <span class="sub num" id="sub">0.0 km · 0 回</span>
+    <span class="sub num" id="sub">0 回</span>
   </section>
 
   <section class="cum" aria-label="月ごとの累計距離">
@@ -229,9 +229,10 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     const inP=(r,P)=>r.date>=ymd(P.start)&&r.date<=ymd(P.end);
     const br=list.filter(r=>inP(r,nowP));
     const bk=br.reduce((a,r)=>a+kc(r),0);
-    $('weekKm').textContent=list.filter(r=>r.date>=monS).reduce((a,r)=>a+r.km,0).toFixed(1);
-    $('weekCap').textContent='v.'+isoWeek(today)+' · '+md(mon)+'–'+md(addDays(mon,6));
-    $('sub').textContent=nowP.name+'　'+br.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+br.length+' 回'+(bk?' · '+bk.toLocaleString()+' kcal':'');
+    const wk=list.filter(r=>r.date>=monS).reduce((a,r)=>a+r.km,0);
+    $('weekCap').textContent=nowP.name;
+    $('weekKm').textContent=br.reduce((a,r)=>a+r.km,0).toFixed(1);
+    $('sub').textContent=br.length+' 回'+(bk?' · '+bk.toLocaleString()+' kcal':'')+' · 今週 v.'+isoWeek(today)+' '+wk.toFixed(1)+' km';
     $('hint').hidden=!isExample;
 
     // 月の累計ライン（表示中の月 vs その前の月）
