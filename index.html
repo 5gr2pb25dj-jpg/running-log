@@ -45,6 +45,13 @@ input::placeholder{color:var(--muted)}
 input:focus-visible,button:focus-visible{outline:1.5px solid var(--ink);outline-offset:2px}
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit;padding:0}
 .save{background:var(--ink);color:var(--bg);border-radius:8px;padding:11px;font-size:15px;font-weight:500}
+.timer{display:flex;align-items:center;gap:10px}
+.timer .t{flex:1;font-size:40px;font-weight:200;line-height:1;letter-spacing:-.01em}
+.timer .t small{font-size:12px;color:var(--muted);margin-left:8px;letter-spacing:0;font-weight:400}
+.btn{border-radius:8px;padding:11px 18px;font-size:15px;font-weight:500;min-height:44px}
+.btn.go{background:var(--ink);color:var(--bg)}
+.btn.line{border:1px solid var(--line);color:var(--ink)}
+.btn.q{color:var(--muted);padding-inline:8px}
 .save:disabled{opacity:.4;cursor:default}
 .msg{font-size:12px;min-height:1.2em;margin:0;color:var(--muted)}
 .msg.err{color:var(--bad)}
@@ -96,6 +103,12 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
   </section>
 
   <form id="form" novalidate>
+    <div class="timer">
+      <span class="t num" id="clock">0:00<small id="clockCap">タイマー</small></span>
+      <button type="button" class="btn line" id="startBtn">スタート</button>
+      <button type="button" class="btn q" id="quitBtn" hidden>やめる</button>
+      <button type="button" class="btn go" id="goalBtn" hidden>ゴール</button>
+    </div>
     <div class="row">
       <input id="date" type="date" aria-label="日付">
       <input id="dist" type="number" inputmode="decimal" step="0.01" min="0" placeholder="km" aria-label="距離 km">
@@ -295,6 +308,37 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
       persist(); render(); setMsg(add.length+' 件を復元しました');
     }catch(e){ setMsg('このファイルは読み込めません','err'); }
   });
+
+  // タイマー：開始時刻だけ保存して経過を計算（画面オフ・アプリ終了でもずれない）
+  let tick=null, quitArmed=false;
+  function drawTimer(){
+    const on=!!state.startedAt;
+    const sec=on?Math.max(0,Math.floor((Date.now()-state.startedAt)/1000)):0;
+    $('clock').firstChild.textContent=on?(fmt(sec)||'0:00'):'0:00';
+    $('clockCap').textContent=on?'計測中':'タイマー';
+    $('startBtn').hidden=on; $('goalBtn').hidden=!on; $('quitBtn').hidden=!on;
+    $('quitBtn').textContent=quitArmed?'本当にやめる':'やめる';
+    if(on&&!tick) tick=setInterval(drawTimer,1000);
+    if(!on&&tick){ clearInterval(tick); tick=null; }
+  }
+  $('startBtn').addEventListener('click',()=>{
+    state.startedAt=Date.now(); quitArmed=false; persist(); drawTimer();
+    try{ navigator.vibrate && navigator.vibrate(30); }catch(e){}
+  });
+  $('goalBtn').addEventListener('click',()=>{
+    const sec=Math.floor((Date.now()-state.startedAt)/1000);
+    $('date').value=ymd(new Date(state.startedAt));
+    $('time').value=fmt(sec);
+    delete state.startedAt; quitArmed=false; persist(); drawTimer();
+    $('dist').focus();
+    setMsg('おつかれさま。距離を入れて「記録」を押してください');
+  });
+  $('quitBtn').addEventListener('click',()=>{
+    if(!quitArmed){ quitArmed=true; drawTimer(); setTimeout(()=>{ quitArmed=false; drawTimer(); },3000); return; }
+    delete state.startedAt; quitArmed=false; persist(); drawTimer(); setMsg('');
+  });
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) drawTimer(); });
+  drawTimer();
 
   render();
 
