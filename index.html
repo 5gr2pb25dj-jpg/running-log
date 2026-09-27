@@ -216,19 +216,14 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     const addDays=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
     const md=d=>d.getDate()+'/'+(d.getMonth()+1);
 
-    // ISO月：その月に木曜日が入っている週をその月の週とする（基本4週、ときどき5週）
-    const thuOf=d=>addDays(d,3-((d.getDay()+6)%7));
+    // 月の区切り：カレンダーどおり（1日〜末日）。中の週は週番号で区切る
     const periodOf=(y,m)=>{
-      const f=new Date(y,m,1), fThu=addDays(f,(4-f.getDay()+7)%7);
-      const start=addDays(fThu,-3);
-      let weeks=0; for(let t=new Date(fThu); t.getMonth()===f.getMonth(); t=addDays(t,7)) weeks++;
-      const end=addDays(start,weeks*7-1);
-      return {y:f.getFullYear(), m:f.getMonth(), start, end, weeks, days:weeks*7,
-        name:(f.getMonth()+1)+'月 · v.'+isoWeek(start)+'–'+isoWeek(end)};
+      const start=new Date(y,m,1), end=new Date(start.getFullYear(),start.getMonth()+1,0);
+      return {y:start.getFullYear(), m:start.getMonth(), start, end, days:end.getDate(),
+        name:(start.getMonth()+1)+'月 · v.'+isoWeek(start)+'–'+isoWeek(end)};
     };
-    const tThu=thuOf(today);
-    const nowP=periodOf(tThu.getFullYear(), tThu.getMonth());
-    const viewP=periodOf(tThu.getFullYear(), tThu.getMonth()+viewOffset);
+    const nowP=periodOf(today.getFullYear(), today.getMonth());
+    const viewP=periodOf(today.getFullYear(), today.getMonth()+viewOffset);
     const prevP=periodOf(viewP.y, viewP.m-1);
 
     const inP=(r,P)=>r.date>=ymd(P.start)&&r.date<=ymd(P.end);
@@ -243,7 +238,7 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     const byDay={};
     list.forEach(r=>{ byDay[r.date]=(byDay[r.date]||0)+r.km; });
     const cumOf=(from,n)=>{ const out=[]; let s=0; for(let i=0;i<n;i++){ s+=byDay[ymd(addDays(from,i))]||0; out.push(s); } return out; };
-    const upto=Math.min(viewP.days, Math.round((today-viewP.start)/864e5)+1);
+    const upto=Math.max(0,Math.min(viewP.days, Math.round((today-viewP.start)/864e5)+1));
     const cur=cumOf(viewP.start,upto);
     const prv=cumOf(prevP.start,Math.min(prevP.days,viewP.days));
     const curTotal=cur[cur.length-1]||0;
@@ -256,11 +251,13 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     const path=a=>a.map((k,i)=>(i?'L':'M')+X(i+1)+' '+Y(k)).join(' ');
     let svg='';
     [0,yMax/2,yMax].forEach(v=>{ svg+='<line class="grid" x1="0" x2="'+CW+'" y1="'+Y(v)+'" y2="'+Y(v)+'"/>'; if(v) svg+='<text class="yl" x="'+CW+'" y="'+(Y(v)-4)+'" text-anchor="end">'+v+(v===yMax?' km':'')+'</text>'; });
-    for(let w=0; w<viewP.weeks; w++){
-      const d=w*7+1;
-      if(w) svg+='<line class="wk" x1="'+X(d)+'" x2="'+X(d)+'" y1="'+T+'" y2="'+B+'"/>';
-      const mid=((+X(d))+(+X(d+6)))/2;
-      svg+='<text class="wl" x="'+mid.toFixed(1)+'" y="'+(B+16)+'" text-anchor="middle">v.'+isoWeek(addDays(viewP.start,w*7))+'</text>';
+    for(let d=1; d<=N; d++){
+      const dt=addDays(viewP.start,d-1), dow=(dt.getDay()+6)%7;
+      if(dow!==0 && !(d===1 && dow<=3)) continue;
+      if(dow===0 && d>1) svg+='<line class="wk" x1="'+X(d)+'" x2="'+X(d)+'" y1="'+T+'" y2="'+B+'"/>';
+      const e=Math.min(N, d+(6-dow));
+      const mid=((+X(d))+(+X(e)))/2;
+      if(e-d>=2) svg+='<text class="wl" x="'+mid.toFixed(1)+'" y="'+(B+16)+'" text-anchor="middle">v.'+isoWeek(dt)+'</text>';
     }
     if(prv.length>1) svg+='<path class="prev" d="'+path(prv)+'"/>';
     if(cur.length>1) svg+='<path class="area" d="'+path(cur)+' L'+X(cur.length)+' '+B+' L0 '+B+' Z"/><path class="cur" d="'+path(cur)+'"/>';
