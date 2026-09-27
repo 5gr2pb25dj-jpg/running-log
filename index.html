@@ -96,13 +96,13 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
   <section class="hero" aria-label="今週">
     <span class="cap num" id="weekCap">今週</span>
     <span class="km num"><span id="weekKm">0.0</span><small>km</small></span>
-    <span class="sub num" id="sub">今月 0.0 km · 0 回</span>
+    <span class="sub num" id="sub">v.37–40 0.0 km · 0 回</span>
   </section>
 
-  <section class="cum" aria-label="今月の累積距離">
-    <div class="cap"><span id="cumCap">今月の累積</span><span class="num" id="cumDiff"></span></div>
-    <svg id="cum" viewBox="0 0 340 182" role="img" aria-label="今月と先月の累積距離の線グラフ"></svg>
-    <div class="legend" aria-hidden="true"><span><i></i>今月</span><span><i class="d"></i>先月</span></div>
+  <section class="cum" aria-label="4週の累計距離">
+    <div class="cap"><span id="cumCap">4週の累計</span><span class="num" id="cumDiff"></span></div>
+    <svg id="cum" viewBox="0 0 340 182" role="img" aria-label="この4週と前の4週の累計距離の線グラフ"></svg>
+    <div class="legend" aria-hidden="true"><span><i></i>この4週</span><span><i class="d"></i>前の4週</span></div>
   </section>
 
   <form id="form" novalidate>
@@ -200,52 +200,57 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     const list = runs.slice().sort((a,b)=> a.date<b.date?1:a.date>b.date?-1:(b.created||0)-(a.created||0));
     const today=new Date(); today.setHours(0,0,0,0);
     const mon=new Date(today); mon.setDate(today.getDate()-((today.getDay()+6)%7));
-    const monS=ymd(mon), mKey=ymd(today).slice(0,7);
+    const monS=ymd(mon);
     const kc = r => r.kcal || kcal(r.km,r.sec,state.weight);
-    const mr=list.filter(r=>r.date.startsWith(mKey));
-    const mk=mr.reduce((a,r)=>a+kc(r),0);
+    const addDays=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+    const md=d=>d.getDate()+'/'+(d.getMonth()+1);
+
+    // 4週ブロック：2024-01-01（月曜・v.1）から28日ごとに区切る
+    const EPOCH=new Date(2024,0,1);
+    const dayIdx=Math.round((today-EPOCH)/864e5);
+    const bStart=addDays(EPOCH, Math.floor(dayIdx/28)*28);
+    const bEnd=addDays(bStart,27);
+    const pStart=addDays(bStart,-28);
+    const bS=ymd(bStart), bE=ymd(bEnd), pS=ymd(pStart);
+    const blockName='v.'+isoWeek(bStart)+'–'+isoWeek(bEnd);
+
+    const br=list.filter(r=>r.date>=bS&&r.date<=bE);
+    const bk=br.reduce((a,r)=>a+kc(r),0);
     $('weekKm').textContent=list.filter(r=>r.date>=monS).reduce((a,r)=>a+r.km,0).toFixed(1);
-    const sun=new Date(mon); sun.setDate(mon.getDate()+6);
-    $('weekCap').textContent='v.'+isoWeek(today)+' · '+mon.getDate()+'/'+(mon.getMonth()+1)+'–'+sun.getDate()+'/'+(sun.getMonth()+1);
-    $('sub').textContent='今月 '+mr.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+mr.length+' 回'+(mk?' · '+mk.toLocaleString()+' kcal':'');
+    $('weekCap').textContent='v.'+isoWeek(today)+' · '+md(mon)+'–'+md(addDays(mon,6));
+    $('sub').textContent=blockName+' '+br.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+br.length+' 回'+(bk?' · '+bk.toLocaleString()+' kcal':'');
     $('hint').hidden=!isExample;
 
-    // 月間累積ライン（今月 vs 先月）
+    // 4週累積ライン（この4週 vs 前の4週）
     const byDay={};
     list.forEach(r=>{ byDay[r.date]=(byDay[r.date]||0)+r.km; });
-    const yy=today.getFullYear(), mm=today.getMonth();
-    const nDays=new Date(yy,mm+1,0).getDate();
-    const pDays=new Date(yy,mm,0).getDate();
-    const cumOf=(y,m,upto)=>{ const out=[]; let s=0; for(let d=1; d<=upto; d++){ s+=byDay[ymd(new Date(y,m,d))]||0; out.push(s); } return out; };
-    const cur=cumOf(yy,mm,today.getDate());
-    const prv=cumOf(yy,mm-1,Math.min(pDays,nDays));
+    const cumOf=(from,n)=>{ const out=[]; let s=0; for(let i=0;i<n;i++){ s+=byDay[ymd(addDays(from,i))]||0; out.push(s); } return out; };
+    const upto=Math.round((today-bStart)/864e5)+1;
+    const cur=cumOf(bStart,upto);
+    const prv=cumOf(pStart,28);
     const curTotal=cur[cur.length-1]||0;
     const top=Math.max(curTotal, prv[prv.length-1]||0, 10);
     const step=top<=20?5:top<=50?10:top<=100?25:top<=200?50:100;
     const yMax=Math.ceil(top/step)*step;
     const CW=340, T=10, B=160;
-    const X=d=>((d-1)/(nDays-1)*CW).toFixed(1);
+    const X=d=>((d-1)/27*CW).toFixed(1);
     const Y=k=>(B-k/yMax*(B-T)).toFixed(1);
     const path=a=>a.map((k,i)=>(i?'L':'M')+X(i+1)+' '+Y(k)).join(' ');
     let svg='';
     [0,yMax/2,yMax].forEach(v=>{ svg+='<line class="grid" x1="0" x2="'+CW+'" y1="'+Y(v)+'" y2="'+Y(v)+'"/>'; if(v) svg+='<text class="yl" x="'+CW+'" y="'+(Y(v)-4)+'" text-anchor="end">'+v+(v===yMax?' km':'')+'</text>'; });
-    // 週の区切り（月曜）と週番号
-    for(let d=1; d<=nDays; d++){
-      const dt=new Date(yy,mm,d), dow=(dt.getDay()+6)%7;
-      const isMon=dow===0, firstPart=d===1&&dow<=3;
-      if(!isMon&&!firstPart) continue;
-      if(isMon&&d>1) svg+='<line class="wk" x1="'+X(d)+'" x2="'+X(d)+'" y1="'+T+'" y2="'+B+'"/>';
-      const end=Math.min(nDays, d+(6-dow));
-      const mid=((+X(d))+(+X(end)))/2;
-      svg+='<text class="wl" x="'+mid.toFixed(1)+'" y="'+(B+16)+'" text-anchor="middle">v.'+isoWeek(dt)+'</text>';
+    for(let w=0; w<4; w++){
+      const d=w*7+1;
+      if(w) svg+='<line class="wk" x1="'+X(d)+'" x2="'+X(d)+'" y1="'+T+'" y2="'+B+'"/>';
+      const mid=((+X(d))+(+X(d+6)))/2;
+      svg+='<text class="wl" x="'+mid.toFixed(1)+'" y="'+(B+16)+'" text-anchor="middle">v.'+isoWeek(addDays(bStart,w*7))+'</text>';
     }
-    if(prv.length>1) svg+='<path class="prev" d="'+path(prv)+'"/>';
+    svg+='<path class="prev" d="'+path(prv)+'"/>';
     if(cur.length>1) svg+='<path class="area" d="'+path(cur)+' L'+X(cur.length)+' '+B+' L0 '+B+' Z"/><path class="cur" d="'+path(cur)+'"/>';
     svg+='<circle class="dot" cx="'+X(cur.length)+'" cy="'+Y(curTotal)+'" r="4"/>';
     $('cum').innerHTML=svg;
-    $('cumCap').textContent=(mm+1)+'月の累積 '+curTotal.toFixed(1)+' km';
-    const same=prv[Math.min(cur.length,prv.length)-1]||0, diff=curTotal-same;
-    $('cumDiff').textContent='先月の同じ日より '+(diff>=0?'+':'−')+Math.abs(diff).toFixed(1)+' km';
+    $('cumCap').textContent=blockName+' の累計 '+curTotal.toFixed(1)+' km';
+    const diff=curTotal-(prv[cur.length-1]||0);
+    $('cumDiff').textContent='前の4週の同じ日より '+(diff>=0?'+':'−')+Math.abs(diff).toFixed(1)+' km';
     const ul=$('list'); ul.innerHTML='';
     const wkTotals={};
     list.forEach(r=>{ const k=weekKey(parse(r.date)); wkTotals[k]=(wkTotals[k]||0)+r.km; });
