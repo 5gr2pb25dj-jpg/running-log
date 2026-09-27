@@ -71,6 +71,10 @@ li:last-child{border-bottom:1px solid var(--line)}
 
 .cum{display:flex;flex-direction:column;gap:8px}
 .cum .cap{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 8px}
+.pnav{display:flex;align-items:center;gap:4px;font-size:13px}
+.pnav button{width:36px;height:36px;border-radius:8px;font-size:20px;line-height:1;color:var(--ink)}
+.pnav button:disabled{color:var(--line);cursor:default}
+.pnav .tot{margin-left:auto;font-size:15px}
 .cum svg{display:block;width:100%;height:auto;overflow:visible}
 .cum .grid{stroke:var(--line);stroke-width:1}
 .cum .prev{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4;opacity:.7}
@@ -96,13 +100,19 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
   <section class="hero" aria-label="今週">
     <span class="cap num" id="weekCap">今週</span>
     <span class="km num"><span id="weekKm">0.0</span><small>km</small></span>
-    <span class="sub num" id="sub">v.37–40 0.0 km · 0 回</span>
+    <span class="sub num" id="sub">0.0 km · 0 回</span>
   </section>
 
-  <section class="cum" aria-label="4週の累計距離">
-    <div class="cap"><span id="cumCap">4週の累計</span><span class="num" id="cumDiff"></span></div>
-    <svg id="cum" viewBox="0 0 340 182" role="img" aria-label="この4週と前の4週の累計距離の線グラフ"></svg>
-    <div class="legend" aria-hidden="true"><span><i></i>この4週</span><span><i class="d"></i>前の4週</span></div>
+  <section class="cum" aria-label="月ごとの累計距離">
+    <div class="pnav">
+      <button type="button" id="prevP" aria-label="前の月">‹</button>
+      <span class="num" id="cumName">—</span>
+      <button type="button" id="nextP" aria-label="次の月">›</button>
+      <span class="num tot" id="cumTotal"></span>
+    </div>
+    <div class="cap"><span class="num" id="cumDiff"></span></div>
+    <svg id="cum" viewBox="0 0 340 182" role="img" aria-label="表示中の月と前の月の累計距離の線グラフ"></svg>
+    <div class="legend" aria-hidden="true"><span><i></i>この月</span><span><i class="d"></i>前の月</span></div>
   </section>
 
   <form id="form" novalidate>
@@ -142,6 +152,7 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
   const KEY = 'runlog.v1';
   let state = load();              // {weight, runs:[{id,date,km,sec,note,weight,kcal,created}]}
   let pendingDel = null;
+  let viewOffset = 0;   // 0 = 今の月、-1 = 1つ前の月…
 
   function load(){
     try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && Array.isArray(s.runs)) return s; }catch(e){}
@@ -205,52 +216,61 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     const addDays=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
     const md=d=>d.getDate()+'/'+(d.getMonth()+1);
 
-    // 4週ブロック：2024-01-01（月曜・v.1）から28日ごとに区切る
-    const EPOCH=new Date(2024,0,1);
-    const dayIdx=Math.round((today-EPOCH)/864e5);
-    const bStart=addDays(EPOCH, Math.floor(dayIdx/28)*28);
-    const bEnd=addDays(bStart,27);
-    const pStart=addDays(bStart,-28);
-    const bS=ymd(bStart), bE=ymd(bEnd), pS=ymd(pStart);
-    const blockName='v.'+isoWeek(bStart)+'–'+isoWeek(bEnd);
+    // ISO月：その月に木曜日が入っている週をその月の週とする（基本4週、ときどき5週）
+    const thuOf=d=>addDays(d,3-((d.getDay()+6)%7));
+    const periodOf=(y,m)=>{
+      const f=new Date(y,m,1), fThu=addDays(f,(4-f.getDay()+7)%7);
+      const start=addDays(fThu,-3);
+      let weeks=0; for(let t=new Date(fThu); t.getMonth()===f.getMonth(); t=addDays(t,7)) weeks++;
+      const end=addDays(start,weeks*7-1);
+      return {y:f.getFullYear(), m:f.getMonth(), start, end, weeks, days:weeks*7,
+        name:(f.getMonth()+1)+'月 · v.'+isoWeek(start)+'–'+isoWeek(end)};
+    };
+    const tThu=thuOf(today);
+    const nowP=periodOf(tThu.getFullYear(), tThu.getMonth());
+    const viewP=periodOf(tThu.getFullYear(), tThu.getMonth()+viewOffset);
+    const prevP=periodOf(viewP.y, viewP.m-1);
 
-    const br=list.filter(r=>r.date>=bS&&r.date<=bE);
+    const inP=(r,P)=>r.date>=ymd(P.start)&&r.date<=ymd(P.end);
+    const br=list.filter(r=>inP(r,nowP));
     const bk=br.reduce((a,r)=>a+kc(r),0);
     $('weekKm').textContent=list.filter(r=>r.date>=monS).reduce((a,r)=>a+r.km,0).toFixed(1);
     $('weekCap').textContent='v.'+isoWeek(today)+' · '+md(mon)+'–'+md(addDays(mon,6));
-    $('sub').textContent=blockName+' '+br.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+br.length+' 回'+(bk?' · '+bk.toLocaleString()+' kcal':'');
+    $('sub').textContent=nowP.name+'　'+br.reduce((a,r)=>a+r.km,0).toFixed(1)+' km · '+br.length+' 回'+(bk?' · '+bk.toLocaleString()+' kcal':'');
     $('hint').hidden=!isExample;
 
-    // 4週累積ライン（この4週 vs 前の4週）
+    // 月の累計ライン（表示中の月 vs その前の月）
     const byDay={};
     list.forEach(r=>{ byDay[r.date]=(byDay[r.date]||0)+r.km; });
     const cumOf=(from,n)=>{ const out=[]; let s=0; for(let i=0;i<n;i++){ s+=byDay[ymd(addDays(from,i))]||0; out.push(s); } return out; };
-    const upto=Math.round((today-bStart)/864e5)+1;
-    const cur=cumOf(bStart,upto);
-    const prv=cumOf(pStart,28);
+    const upto=Math.min(viewP.days, Math.round((today-viewP.start)/864e5)+1);
+    const cur=cumOf(viewP.start,upto);
+    const prv=cumOf(prevP.start,Math.min(prevP.days,viewP.days));
     const curTotal=cur[cur.length-1]||0;
     const top=Math.max(curTotal, prv[prv.length-1]||0, 10);
     const step=top<=20?5:top<=50?10:top<=100?25:top<=200?50:100;
     const yMax=Math.ceil(top/step)*step;
-    const CW=340, T=10, B=160;
-    const X=d=>((d-1)/27*CW).toFixed(1);
+    const CW=340, T=10, B=160, N=viewP.days;
+    const X=d=>((d-1)/(N-1)*CW).toFixed(1);
     const Y=k=>(B-k/yMax*(B-T)).toFixed(1);
     const path=a=>a.map((k,i)=>(i?'L':'M')+X(i+1)+' '+Y(k)).join(' ');
     let svg='';
     [0,yMax/2,yMax].forEach(v=>{ svg+='<line class="grid" x1="0" x2="'+CW+'" y1="'+Y(v)+'" y2="'+Y(v)+'"/>'; if(v) svg+='<text class="yl" x="'+CW+'" y="'+(Y(v)-4)+'" text-anchor="end">'+v+(v===yMax?' km':'')+'</text>'; });
-    for(let w=0; w<4; w++){
+    for(let w=0; w<viewP.weeks; w++){
       const d=w*7+1;
       if(w) svg+='<line class="wk" x1="'+X(d)+'" x2="'+X(d)+'" y1="'+T+'" y2="'+B+'"/>';
       const mid=((+X(d))+(+X(d+6)))/2;
-      svg+='<text class="wl" x="'+mid.toFixed(1)+'" y="'+(B+16)+'" text-anchor="middle">v.'+isoWeek(addDays(bStart,w*7))+'</text>';
+      svg+='<text class="wl" x="'+mid.toFixed(1)+'" y="'+(B+16)+'" text-anchor="middle">v.'+isoWeek(addDays(viewP.start,w*7))+'</text>';
     }
-    svg+='<path class="prev" d="'+path(prv)+'"/>';
+    if(prv.length>1) svg+='<path class="prev" d="'+path(prv)+'"/>';
     if(cur.length>1) svg+='<path class="area" d="'+path(cur)+' L'+X(cur.length)+' '+B+' L0 '+B+' Z"/><path class="cur" d="'+path(cur)+'"/>';
-    svg+='<circle class="dot" cx="'+X(cur.length)+'" cy="'+Y(curTotal)+'" r="4"/>';
+    if(cur.length) svg+='<circle class="dot" cx="'+X(cur.length)+'" cy="'+Y(curTotal)+'" r="4"/>';
     $('cum').innerHTML=svg;
-    $('cumCap').textContent=blockName+' の累計 '+curTotal.toFixed(1)+' km';
-    const diff=curTotal-(prv[cur.length-1]||0);
-    $('cumDiff').textContent='前の4週の同じ日より '+(diff>=0?'+':'−')+Math.abs(diff).toFixed(1)+' km';
+    $('cumName').textContent=viewP.name;
+    $('cumTotal').textContent=curTotal.toFixed(1)+' km';
+    const diff=curTotal-(prv[Math.min(cur.length,prv.length)-1]||0);
+    $('cumDiff').textContent=cur.length?('前の月の同じ日より '+(diff>=0?'+':'−')+Math.abs(diff).toFixed(1)+' km'):'';
+    $('nextP').disabled=viewOffset>=0;
     const ul=$('list'); ul.innerHTML='';
     const wkTotals={};
     list.forEach(r=>{ const k=weekKey(parse(r.date)); wkTotals[k]=(wkTotals[k]||0)+r.km; });
@@ -302,6 +322,9 @@ footer button{color:var(--muted);text-decoration:underline;text-underline-offset
     state.weight = v>=20&&v<=300 ? Math.round(v*10)/10 : 0;
     persist(); prev(); render();
   });
+
+  $('prevP').addEventListener('click',()=>{ viewOffset--; render(); });
+  $('nextP').addEventListener('click',()=>{ if(viewOffset<0){ viewOffset++; render(); } });
 
   $('form').addEventListener('submit',e=>{
     e.preventDefault();
